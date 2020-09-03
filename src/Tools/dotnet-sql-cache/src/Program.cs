@@ -82,6 +82,36 @@ namespace Microsoft.Extensions.Caching.SqlConfig.Tools
                     });
                 });
 
+                app.Command("script", command =>
+                {
+                    command.Description = app.Description;
+
+                    var schemaNameArg = command.Argument(
+                        "[schemaName]", "Name of the table schema.");
+
+                    var tableNameArg = command.Argument(
+                        "[tableName]", "Name of the table to be created.");
+
+                    command.HelpOption();
+
+                    command.OnExecute(() =>
+                    {
+                        var reporter = CreateReporter(verbose.HasValue());
+                        if (string.IsNullOrEmpty(schemaNameArg.Value)
+                            || string.IsNullOrEmpty(tableNameArg.Value))
+                        {
+                            reporter.Error("Invalid input");
+                            app.ShowHelp();
+                            return 2;
+                        }
+
+                        _schemaName = schemaNameArg.Value;
+                        _tableName = tableNameArg.Value;
+
+                        return PrintTableCreateQuery(reporter);
+                    });
+                });
+
                 // Show help information if no subcommand/option was specified.
                 app.OnExecute(() =>
                 {
@@ -168,6 +198,18 @@ namespace Microsoft.Extensions.Caching.SqlConfig.Tools
                 throw new ArgumentException(
                     $"Invalid SQL Server connection string '{_connectionString}'. {ex.Message}", ex);
             }
+        }
+
+        private int PrintTableCreateQuery(IReporter reporter)
+        {
+            var sqlQueries = new SqlQueries(_schemaName, _tableName);
+
+            reporter.Output(sqlQueries.CreateTable + ";");
+            reporter.Output("GO");
+            reporter.Output(sqlQueries.CreateNonClusteredIndexOnExpirationTime + ";");
+            reporter.Output("GO");
+
+            return 0;
         }
     }
 }
